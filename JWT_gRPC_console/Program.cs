@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Net;
 using System.Linq.Expressions;
 using System.Text;
@@ -12,6 +13,8 @@ using Microsoft.IdentityModel.Tokens;
 //using System.​Security.​Principal;
 using Newtonsoft.Json.Linq;
 using System.Linq;
+using Grpc.Core;
+using Grpc.Net.Client;
 
 namespace JWT_gRPC_console
 {
@@ -22,6 +25,8 @@ namespace JWT_gRPC_console
         static void Main(string[] args)
         {
            var stringToken = GenerateToken();
+
+
            // var  stringToken = GenerateToken_alt();
           //  ValidateToken(stringToken);
 
@@ -240,6 +245,51 @@ namespace JWT_gRPC_console
             return result.ToString();
         }
 
+
+
+
+        static async Task gRPc_connect()
+        {
+
+
+           
+                // создаем канал для обмена сообщениями с сервером
+                // параметр - адрес сервера gRPC
+                using var channel = GrpcChannel.ForAddress("https://localhost:5001");
+            
+                // создаем клиента
+           
+          //  var client = new Greeter.GreeterClient(channel);
+
+            var c = new SpeechToText.SpeechToTextClient(channel);
+            
+
+
+                Console.Write("Введите имя: ");
+                string name = Console.ReadLine();
+                // обмениваемся сообщениями с сервером
+                var reply = await client.SayHelloAsync(new HelloRequest { Name = name });
+                Console.WriteLine("Ответ сервера: " + reply.Message);
+                Console.ReadKey();
+           
+           
+
+
+            /*
+            Channel channel = new Channel("127.0.0.1:30051", ChannelCredentials.Insecure);
+
+            var client = new Greeter.GreeterClient(channel);
+            String user = "you";
+
+            var reply = client.SayHello(new HelloRequest { Name = user });
+            Console.WriteLine("Greeting: " + reply.Message);
+
+            channel.ShutdownAsync().Wait();
+            Console.WriteLine("Press any key to exit...");
+            Console.ReadKey();
+            */
+
+        }
 
     }
 }
