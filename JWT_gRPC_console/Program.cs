@@ -10,20 +10,20 @@ using System.IdentityModel.Tokens;
 using System.Collections.Generic;
 using Microsoft.IdentityModel.Tokens;
 //using System.​Security.​Principal;
-
-
-
+using Newtonsoft.Json.Linq;
+using System.Linq;
 
 namespace JWT_gRPC_console
 {
 
     class Program
     {
-        static string key = "401b09eab3c013d4ca54922bb802bec8fd5318192b0a75f201d8b3727429090fb337591abd3e44453b954555b7a0812e1081c39b740293f765eae731f5a65ed1";
+        static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
         static void Main(string[] args)
         {
-            var stringToken = GenerateToken();
-            ValidateToken(stringToken);
+           var stringToken = GenerateToken();
+           // var  stringToken = GenerateToken_alt();
+          //  ValidateToken(stringToken);
 
             //            Console.WriteLine("Hello World!");
         }
@@ -32,22 +32,146 @@ namespace JWT_gRPC_console
 
         private static string GenerateToken()
         {
-            var securityKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+            
+            
+
+            var securityKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(Encoding.UTF8.GetBytes(seckey));
+
+            /*
+            // Create JWT credentials
+            var encryptingCredentials = new EncryptingCredentials(securityKey,
+                Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256
+                );
+            */
             var credentials = new Microsoft.IdentityModel.Tokens.SigningCredentials(securityKey, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256);
 
-            var secToken = new JwtSecurityToken(
-                signingCredentials: credentials,
-                issuer: "Sample",
-                audience: "Sample",
+
+
+            // Create JWT header
+
+            IDictionary<string, string> D  = new Dictionary<string, string>
+
+            {
+                ["Typ"] = "JWT",
+                ["Alg"] = "HS256",
+                ["Kid"] = "bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert"
+            };
+
+
+            var header = new JwtHeader(credentials,D);
+            
+
+            ////////////////////Альтернатива header//////////////
+            /*
+            var header = new JwtHeader( new Dictionary<string, object>()
+
+            { ["typ"] = "JWT",
+                ["Alg"] = "HS256",
+                ["Kid"] = "" }
+            
+                );
+            */
+
+            /////////////////////////////////////////////////
+
+            var payload = new JwtPayload(
+                
+                
                 claims: new[]
                 {
-                new Claim(JwtRegisteredClaimNames.Sub, "meziantou")
-                },
-                expires: DateTime.UtcNow.AddDays(1));
+                new Claim(JwtRegisteredClaimNames.Sub, "Filbert"),
+                new Claim(JwtRegisteredClaimNames.Jti, System.Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Sid, System.Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Iss, "tinkoff_mobile_bank_api"),
+                new Claim(JwtRegisteredClaimNames.Nbf, DateTime.UtcNow.ToString()),
+                new Claim(JwtRegisteredClaimNames.Aud, "tinkoff.cloud.stt"),
+                new Claim(JwtRegisteredClaimNames.Exp, DateTime.UtcNow.AddDays(1).ToString()),
+                 
+        }
+                );
+
+
+            
+
+
+
+
+            var secToken = new JwtSecurityToken(
+                header, payload);
+            //signingCredentials: credentials,
+
+
+            secToken.Header.Add("kid", "bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert");
+
+
+
+
+
+                
 
             var handler = new JwtSecurityTokenHandler();
+
             return handler.WriteToken(secToken);
         }
+
+
+
+
+
+
+
+        private static string GenerateToken_alt()
+        {
+
+            JObject json_hdr = JObject.Parse(@"{
+                ""typ"" : ""JWT"",
+                ""alg"" : ""HS256"",
+                ""kid"" : ""bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert""
+}");
+
+
+
+            JObject json_payLoad = JObject.Parse(
+                "{ \"iss\": \"tinkoff_mobile_bank_api\",  \"sub\": \"user12345\", \"aud\": \"tinkoff.cloud.stt\", \"exp\":\"" + 
+                DateTime.UtcNow.AddDays(1).ToString() + "\"}"
+
+
+                );
+
+
+            var unsignedToken = Base64UrlEncoder.Encode(json_hdr.ToString()) + '.' + Base64UrlEncoder.Encode(json_payLoad.ToString());
+
+
+            string signature = HMACHASH(unsignedToken, seckey);
+
+            /*
+            using (var Algorithm = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(seckey)))
+            {
+
+                var signatureHashBytes = Algorithm.ComputeHash(Encoding.UTF8.GetBytes(unsignedToken));
+
+                
+
+                signature = System.Text.Encoding.UTF8.GetString(signatureHashBytes);
+                
+            }
+            
+            */
+
+
+
+            var token = Base64UrlEncoder.Encode(json_hdr.ToString()) + '.' + Base64UrlEncoder.Encode(json_payLoad.ToString()) + '.' + 
+            
+               Base64UrlEncoder.Encode(signature);
+
+
+            return token;
+        }
+
+
+
+
+
 
         private static bool ValidateToken(string authToken)
         {
@@ -68,11 +192,53 @@ namespace JWT_gRPC_console
                 ValidateIssuer = false,   // Because there is no issuer in the generated token
                 ValidIssuer = "Sample",
                 ValidAudience = "Sample",
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)) // The same key as the one that generate the token
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(seckey)) // The same key as the one that generate the token
             };
         }
 
+        static string HMACHASH(string str, string key)
+        {
+            byte[] bkey = Encoding.UTF8.GetBytes(key);
+            using (var hmac = new HMACSHA256(bkey))
+            {
+                byte[] bstr = Encoding.UTF8.GetBytes(str);
+                var bhash = hmac.ComputeHash(bstr);
+                // Base 64 Encode
+                //                var encodedbhash = Convert.ToBase64String(bhash);
 
+
+
+                //                var bh = byteToHex(bhash);
+                // return BitConverter.ToString(bhash).Replace("-", string.Empty).ToLower();
+
+                return  Encoding.UTF8.GetString(bhash, 0, bhash.Length);
+                // return bytesToString(bhash);
+
+
+            }
+        }
+
+
+        public static string bytesToString(byte[] byteArray)
+        {
+            StringBuilder builder = new StringBuilder();
+                  for (int i = 0; i < byteArray.Length; i++)
+                   {
+       builder.Append(byteArray[i].ToString("x2"));
+                 }
+            return builder.ToString(); 
+        }
+
+
+        public static string byteToHex(byte[] byteArray)
+        {
+            StringBuilder result = new StringBuilder();
+            foreach (byte b in byteArray)
+            {
+                result.AppendFormat("{0:x2}", b);
+            }
+            return result.ToString();
+        }
 
 
     }
