@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Net;
 using System.Linq.Expressions;
@@ -23,14 +24,14 @@ namespace JWT_gRPC_console
     class Program
     {
         static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
-        static void Main(string[] args)
+      public  static void Main(string[] args)
         {
-
+            gRPc_connect();
 
            // var  stringToken = GenerateToken_alt();
           //  ValidateToken(stringToken);
 
-            //            Console.WriteLine("Hello World!");
+          
         }
                
 
@@ -248,24 +249,24 @@ namespace JWT_gRPC_console
 
 
 
-        static async Task gRPc_connect()
+        static void gRPc_connect()
         {
 
 
 
             // создаем канал для обмена сообщениями с сервером
             // параметр - адрес сервера gRPC
-            GrpcChannelOptions gco = new GrpcChannelOptions() ;
-            
 
-                using var channel = GrpcChannel.ForAddress("https://localhost:5001");
-            
-                // создаем клиента
-           
-          //  var client = new Greeter.GreeterClient(channel);
 
-            var c = new SpeechToText.SpeechToTextClient(channel);
-           
+
+
+
+            // создаем клиента
+
+            //  var client = new Greeter.GreeterClient(channel);
+            // var mp3 = new MP3File(@"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3","testik");
+            var mp3 = TagLib.File.Create(@"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3");
+
 
             // первый запрос
             StreamingRecognitionConfig streaming_config = new StreamingRecognitionConfig();
@@ -280,7 +281,7 @@ namespace JWT_gRPC_console
             // var z =  c.StreamingRecognize(srr);
             
                 
-                var SR = c.StreamingRecognize();
+             
 
 
 
@@ -310,50 +311,95 @@ namespace JWT_gRPC_console
         }
 
 
-        private Metadata GetMetadataSTT()
+       
+
+      
+
+        public class VoiceKitClient
         {
-            Metadata header = new Metadata();
-            header.Add("Authorization", $"Bearer { GenerateToken() }");
-            return header;
-        }
+            SpeechToText.SpeechToTextClient _clientSTT;
+            string _authSTT;
 
-
-        public async Task StreamingRecognize(StreamingRecognitionConfig config, Stream audioStream)
-        {
-            var streamingSTT = c.StreamingRecognize(GetMetadataSTT());
-            var requestWithConfig = new StreamingRecognizeRequest
+            public VoiceKitClient(string apiKey, string secretKey)
             {
-                StreamingConfig = config
-            };
-            await streamingSTT.RequestStream.WriteAsync(requestWithConfig);
+                _authSTT = GenerateToken();
 
-            Task PrintResponsesTask = Task.Run(async () =>
-            {
-                while (await streamingSTT.ResponseStream.MoveNext())
-                {
-                    foreach (var result in streamingSTT.ResponseStream.Current.Results)
-                        foreach (var alternative in result.RecognitionResult.Alternatives)
-                            System.Console.WriteLine(alternative.Transcript);
-                }
-            });
+                //using var channel = GrpcChannel.ForAddress("https://localhost:5001");
 
-            var buffer = new byte[2 * 1024];
-            int bytesRead;
-            while ((bytesRead = audioStream.Read(buffer, 0, buffer.Length)) > 0)
+
+                GrpcChannelOptions gco = new GrpcChannelOptions();
+                
+
+
+                var cred = new SslCredentials();
+
+
+                gco.Credentials = cred;
+
+
+                // var channelSTT = new Channel("stt.tinkoff.ru:443", cred);
+
+
+                var channelSTT =  GrpcChannel.ForAddress("stt.tinkoff.ru:443", gco);
+
+
+                _clientSTT = new SpeechToText.SpeechToTextClient(channelSTT);
+
+            }
+            private Metadata GetMetadataSTT()
             {
-                await streamingSTT.RequestStream.WriteAsync(
-                    new StreamingRecognizeRequest
-                    {
-                        AudioContent = Google.Protobuf
-                        .ByteString.CopyFrom(buffer, 0, bytesRead),
-                    });
+                Metadata header = new Metadata();
+                header.Add("Authorization", $"Bearer { _authSTT }");
+                return header;
             }
 
-            await streamingSTT.RequestStream.CompleteAsync();
-            await PrintResponsesTask;
+            public async Task StreamingRecognize(StreamingRecognitionConfig config, Stream audioStream)
+            {
+                var streamingSTT = _clientSTT.StreamingRecognize(GetMetadataSTT());
+                var requestWithConfig = new StreamingRecognizeRequest
+                {
+                    StreamingConfig = config
+                };
+                await streamingSTT.RequestStream.WriteAsync(requestWithConfig);
+
+                Task PrintResponsesTask = Task.Run(async () =>
+                {
+                    while (await streamingSTT.ResponseStream.MoveNext())
+                    {
+                        foreach (var result in streamingSTT.ResponseStream.Current.Results)
+                            foreach (var alternative in result.RecognitionResult.Alternatives)
+                                System.Console.WriteLine(alternative.Transcript);
+                    }
+                });
+
+                var buffer = new byte[2 * 1024];
+                int bytesRead;
+                while ((bytesRead = audioStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    await streamingSTT.RequestStream.WriteAsync(
+                        new StreamingRecognizeRequest
+                        {
+                            AudioContent = Google.Protobuf
+                            .ByteString.CopyFrom(buffer, 0, bytesRead),
+                        });
+                }
+
+                await streamingSTT.RequestStream.CompleteAsync();
+                await PrintResponsesTask;
+            }
+
+
+
         }
 
 
 
     }
+
+
+
+
+
+
+
 }
