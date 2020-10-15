@@ -15,6 +15,7 @@ using Newtonsoft.Json.Linq;
 using System.Linq;
 using Grpc.Core;
 using Grpc.Net.Client;
+using System.IO;
 
 namespace JWT_gRPC_console
 {
@@ -24,7 +25,6 @@ namespace JWT_gRPC_console
         static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
         static void Main(string[] args)
         {
-           var stringToken = GenerateToken();
 
 
            // var  stringToken = GenerateToken_alt();
@@ -252,9 +252,12 @@ namespace JWT_gRPC_console
         {
 
 
-           
-                // создаем канал для обмена сообщениями с сервером
-                // параметр - адрес сервера gRPC
+
+            // создаем канал для обмена сообщениями с сервером
+            // параметр - адрес сервера gRPC
+            GrpcChannelOptions gco = new GrpcChannelOptions() ;
+            
+
                 using var channel = GrpcChannel.ForAddress("https://localhost:5001");
             
                 // создаем клиента
@@ -262,17 +265,32 @@ namespace JWT_gRPC_console
           //  var client = new Greeter.GreeterClient(channel);
 
             var c = new SpeechToText.SpeechToTextClient(channel);
+           
+
+            // первый запрос
+            StreamingRecognitionConfig streaming_config = new StreamingRecognitionConfig();
+            streaming_config.Config.Encoding = AudioEncoding.MpegAudio;
+            streaming_config.Config.SampleRateHertz = 48000;
+            streaming_config.Config.NumChannels = 1;
+
+             var srr = new StreamingRecognizeRequest();
+             srr.StreamingConfig = streaming_config;
             
+            
+            // var z =  c.StreamingRecognize(srr);
+            
+                
+                var SR = c.StreamingRecognize();
 
 
-                Console.Write("Введите имя: ");
-                string name = Console.ReadLine();
-                // обмениваемся сообщениями с сервером
-                var reply = await client.SayHelloAsync(new HelloRequest { Name = name });
-                Console.WriteLine("Ответ сервера: " + reply.Message);
-                Console.ReadKey();
-           
-           
+
+
+            /// Далее Реализуем генератор запросов:
+            /// открвыем аудио файл и шлем частями
+
+
+
+
 
 
             /*
@@ -290,6 +308,52 @@ namespace JWT_gRPC_console
             */
 
         }
+
+
+        private Metadata GetMetadataSTT()
+        {
+            Metadata header = new Metadata();
+            header.Add("Authorization", $"Bearer { GenerateToken() }");
+            return header;
+        }
+
+
+        public async Task StreamingRecognize(StreamingRecognitionConfig config, Stream audioStream)
+        {
+            var streamingSTT = c.StreamingRecognize(GetMetadataSTT());
+            var requestWithConfig = new StreamingRecognizeRequest
+            {
+                StreamingConfig = config
+            };
+            await streamingSTT.RequestStream.WriteAsync(requestWithConfig);
+
+            Task PrintResponsesTask = Task.Run(async () =>
+            {
+                while (await streamingSTT.ResponseStream.MoveNext())
+                {
+                    foreach (var result in streamingSTT.ResponseStream.Current.Results)
+                        foreach (var alternative in result.RecognitionResult.Alternatives)
+                            System.Console.WriteLine(alternative.Transcript);
+                }
+            });
+
+            var buffer = new byte[2 * 1024];
+            int bytesRead;
+            while ((bytesRead = audioStream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                await streamingSTT.RequestStream.WriteAsync(
+                    new StreamingRecognizeRequest
+                    {
+                        AudioContent = Google.Protobuf
+                        .ByteString.CopyFrom(buffer, 0, bytesRead),
+                    });
+            }
+
+            await streamingSTT.RequestStream.CompleteAsync();
+            await PrintResponsesTask;
+        }
+
+
 
     }
 }
