@@ -68,16 +68,7 @@ namespace JWT_gRPC_console
             var header = new JwtHeader(credentials,D);
             
 
-            ////////////////////Альтернатива header//////////////
-            /*
-            var header = new JwtHeader( new Dictionary<string, object>()
-
-            { ["typ"] = "JWT",
-                ["Alg"] = "HS256",
-                ["Kid"] = "" }
             
-                );
-            */
 
             /////////////////////////////////////////////////
 
@@ -337,7 +328,7 @@ namespace JWT_gRPC_console
                 // var channelSTT = new Channel("stt.tinkoff.ru:443", cred);
 
 
-                var channelSTT =  GrpcChannel.ForAddress("http://stt.tinkoff.ru:443",gco);
+                var channelSTT =  GrpcChannel.ForAddress("https://stt.tinkoff.ru",gco);
                // var channelSTT = new Grpc.Core.Channel("stt.tinkoff.ru:443", cred);
 
                 _clientSTT = new SpeechToText.SpeechToTextClient(channelSTT);
