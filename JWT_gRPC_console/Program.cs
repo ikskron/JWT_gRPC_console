@@ -312,7 +312,7 @@ namespace JWT_gRPC_console
             {
                 _authSTT = GenerateToken(secretKey, apiKey);
 
-                //using var channel = GrpcChannel.ForAddress("https://localhost:5001");
+                
 
 
                 GrpcChannelOptions gco = new GrpcChannelOptions();
@@ -328,7 +328,7 @@ namespace JWT_gRPC_console
                 // var channelSTT = new Channel("stt.tinkoff.ru:443", cred);
 
 
-                var channelSTT =  GrpcChannel.ForAddress("https://stt.tinkoff.ru",gco);
+                var channelSTT =  GrpcChannel.ForAddress("https://stt.tinkoff.ru:443",gco);
                // var channelSTT = new Grpc.Core.Channel("stt.tinkoff.ru:443", cred);
 
                 _clientSTT = new SpeechToText.SpeechToTextClient(channelSTT);
