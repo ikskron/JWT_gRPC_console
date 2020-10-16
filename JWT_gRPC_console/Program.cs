@@ -23,20 +23,21 @@ namespace JWT_gRPC_console
 
     class Program
     {
-        static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
+      //  static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
       public  static void Main(string[] args)
         {
-            gRPc_connect();
+           gRPc_connect();
 
+           
            // var  stringToken = GenerateToken_alt();
-          //  ValidateToken(stringToken);
+           //  ValidateToken(stringToken);
 
-          
+
         }
                
 
 
-        private static string GenerateToken()
+        private static string GenerateToken(string seckey, string apikey)
         {
             
             
@@ -60,7 +61,7 @@ namespace JWT_gRPC_console
             {
                 ["Typ"] = "JWT",
                 ["Alg"] = "HS256",
-                ["Kid"] = "bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert"
+                ["Kid"] =  apikey
             };
 
 
@@ -125,8 +126,8 @@ namespace JWT_gRPC_console
 
 
 
-
-        private static string GenerateToken_alt()
+        /*
+        private static string GenerateToken_alt(string seckey, string apikey)
         {
 
             JObject json_hdr = JObject.Parse(@"{
@@ -150,19 +151,7 @@ namespace JWT_gRPC_console
 
             string signature = HMACHASH(unsignedToken, seckey);
 
-            /*
-            using (var Algorithm = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(seckey)))
-            {
-
-                var signatureHashBytes = Algorithm.ComputeHash(Encoding.UTF8.GetBytes(unsignedToken));
-
-                
-
-                signature = System.Text.Encoding.UTF8.GetString(signatureHashBytes);
-                
-            }
-            
-            */
+        
 
 
 
@@ -174,22 +163,23 @@ namespace JWT_gRPC_console
             return token;
         }
 
+        */
 
 
 
 
 
-        private static bool ValidateToken(string authToken)
+        private static bool ValidateToken(string authToken, string seckey)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var validationParameters = GetValidationParameters();
+            var validationParameters = GetValidationParameters(seckey);
 
             SecurityToken validatedToken;
             System.Security.Principal.IPrincipal principal = tokenHandler.ValidateToken(authToken, validationParameters, out validatedToken);
             return true;
         }
 
-        private static TokenValidationParameters GetValidationParameters()
+        private static TokenValidationParameters GetValidationParameters(string seckey)
         {
             return new TokenValidationParameters()
             {
@@ -265,23 +255,29 @@ namespace JWT_gRPC_console
 
             //  var client = new Greeter.GreeterClient(channel);
             // var mp3 = new MP3File(@"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3","testik");
-            var mp3 = TagLib.File.Create(@"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3");
+            string path = @"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3";
+            var mp3 = TagLib.File.Create(path);
 
-
+            var vkc = new VoiceKitClient("bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert", "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=");
+            
             // первый запрос
             StreamingRecognitionConfig streaming_config = new StreamingRecognitionConfig();
+            streaming_config.Config = new RecognitionConfig();
             streaming_config.Config.Encoding = AudioEncoding.MpegAudio;
-            streaming_config.Config.SampleRateHertz = 48000;
-            streaming_config.Config.NumChannels = 1;
+            streaming_config.Config.SampleRateHertz = (uint)mp3.Properties.AudioSampleRate ;
+            streaming_config.Config.NumChannels = (uint)mp3.Properties.AudioChannels;
 
-             var srr = new StreamingRecognizeRequest();
-             srr.StreamingConfig = streaming_config;
+            mp3.Dispose();
+           using FileStream fstream =  File.Open(path, FileMode.Open);
+
+             vkc.StreamingRecognize(streaming_config, fstream).GetAwaiter().GetResult();
             
+
             
             // var z =  c.StreamingRecognize(srr);
-            
-                
-             
+
+
+
 
 
 
@@ -320,9 +316,10 @@ namespace JWT_gRPC_console
             SpeechToText.SpeechToTextClient _clientSTT;
             string _authSTT;
 
-            public VoiceKitClient(string apiKey, string secretKey)
+             public VoiceKitClient(string apiKey, string secretKey)
+
             {
-                _authSTT = GenerateToken();
+                _authSTT = GenerateToken(secretKey, apiKey);
 
                 //using var channel = GrpcChannel.ForAddress("https://localhost:5001");
 
@@ -331,17 +328,17 @@ namespace JWT_gRPC_console
                 
 
 
-                var cred = new SslCredentials();
+                //var cred = new SslCredentials();
 
 
-                gco.Credentials = cred;
+                gco.Credentials = new SslCredentials();
 
 
                 // var channelSTT = new Channel("stt.tinkoff.ru:443", cred);
 
 
-                var channelSTT =  GrpcChannel.ForAddress("stt.tinkoff.ru:443", gco);
-
+                var channelSTT =  GrpcChannel.ForAddress("http://stt.tinkoff.ru:443",gco);
+               // var channelSTT = new Grpc.Core.Channel("stt.tinkoff.ru:443", cred);
 
                 _clientSTT = new SpeechToText.SpeechToTextClient(channelSTT);
 
