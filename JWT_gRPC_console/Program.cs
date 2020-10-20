@@ -17,6 +17,8 @@ using System.Linq;
 using Grpc.Core;
 using Grpc.Net.Client;
 using System.IO;
+using JWT.Builder;
+using JWT.Algorithms;
 
 namespace JWT_gRPC_console
 {
@@ -65,7 +67,7 @@ namespace JWT_gRPC_console
             };
 
 
-            var header = new JwtHeader(credentials,D);
+            var header = new System.IdentityModel.Tokens.Jwt.JwtHeader(credentials,D);
             
 
             
@@ -84,7 +86,8 @@ namespace JWT_gRPC_console
                 new Claim(JwtRegisteredClaimNames.Nbf, DateTime.UtcNow.ToString()),
                 new Claim(JwtRegisteredClaimNames.Aud, "tinkoff.cloud.stt"),
                 new Claim(JwtRegisteredClaimNames.Exp, DateTime.UtcNow.AddDays(1).ToString()),
-                 
+                new Claim(JwtRegisteredClaimNames.Iat, DateTime.UtcNow.ToString())
+
         }
                 );
 
@@ -305,14 +308,14 @@ namespace JWT_gRPC_console
         public class VoiceKitClient
         {
             SpeechToText.SpeechToTextClient _clientSTT;
-            string _authSTT;
+            Auth _authSTT;
 
              public VoiceKitClient(string apiKey, string secretKey)
 
             {
-                _authSTT = GenerateToken(secretKey, apiKey);
+                // _authSTT = GenerateToken(secretKey, apiKey);
+                _authSTT = new Auth(apiKey, secretKey, "tinkoff.cloud.stt");
 
-                
 
 
                 GrpcChannelOptions gco = new GrpcChannelOptions();
@@ -348,9 +351,9 @@ namespace JWT_gRPC_console
                 {
                     StreamingConfig = config
                 };
-                await streamingSTT.RequestStream.WriteAsync(requestWithConfig);
+                await streamingSTT.RequestStream.WriteAsync(requestWithConfig); //передаем параметры аудио
 
-                Task PrintResponsesTask = Task.Run(async () =>
+                Task PrintResponsesTask = Task.Run(async () =>                 // Пишем ответ в консоль
                 {
                     while (await streamingSTT.ResponseStream.MoveNext())
                     {
@@ -381,7 +384,48 @@ namespace JWT_gRPC_console
         }
 
 
+        public class Auth
+        {
+            string _apiKey;
+            string _secretKey;
+            string _endpoint;
+            DateTimeOffset _expTime;
+            string _jwt;
 
+            public string Token
+            {
+                get
+                {
+                    if (_expTime == null || _expTime < DateTimeOffset.UtcNow)
+                    {
+                        CreateJWT();
+                    }
+                    return _jwt;
+                }
+            }
+
+            public Auth(string apiKey, string secretKey, string endpoint)
+            {
+                _apiKey = apiKey;
+                _secretKey = secretKey;
+                _endpoint = endpoint;
+
+                CreateJWT();
+            }
+
+            private void CreateJWT()
+            {
+                _expTime = DateTimeOffset.UtcNow.AddMinutes(5);
+
+                _jwt = new JwtBuilder()
+                .WithAlgorithm(new HMACSHA256Algorithm())
+                .WithSecret(Convert.FromBase64String(_secretKey))
+                .AddClaim("aud", _endpoint)
+                .AddClaim("exp", _expTime.ToUnixTimeSeconds())
+                .AddHeader(HeaderName.KeyId, _apiKey)
+                .Encode();
+            }
+        }
     }
 
 
