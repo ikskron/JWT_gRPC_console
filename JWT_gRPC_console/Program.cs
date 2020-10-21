@@ -19,6 +19,9 @@ using Grpc.Net.Client;
 using System.IO;
 using JWT.Builder;
 using JWT.Algorithms;
+using NAudio.Wave;
+
+
 
 namespace JWT_gRPC_console
 {
@@ -120,44 +123,7 @@ namespace JWT_gRPC_console
 
 
 
-        /*
-        private static string GenerateToken_alt(string seckey, string apikey)
-        {
-
-            JObject json_hdr = JObject.Parse(@"{
-                ""typ"" : ""JWT"",
-                ""alg"" : ""HS256"",
-                ""kid"" : ""bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert""
-}");
-
-
-
-            JObject json_payLoad = JObject.Parse(
-                "{ \"iss\": \"tinkoff_mobile_bank_api\",  \"sub\": \"user12345\", \"aud\": \"tinkoff.cloud.stt\", \"exp\":\"" + 
-                DateTime.UtcNow.AddDays(1).ToString() + "\"}"
-
-
-                );
-
-
-            var unsignedToken = Base64UrlEncoder.Encode(json_hdr.ToString()) + '.' + Base64UrlEncoder.Encode(json_payLoad.ToString());
-
-
-            string signature = HMACHASH(unsignedToken, seckey);
-
         
-
-
-
-            var token = Base64UrlEncoder.Encode(json_hdr.ToString()) + '.' + Base64UrlEncoder.Encode(json_payLoad.ToString()) + '.' + 
-            
-               Base64UrlEncoder.Encode(signature);
-
-
-            return token;
-        }
-
-        */
 
 
 
@@ -249,7 +215,9 @@ namespace JWT_gRPC_console
 
             //  var client = new Greeter.GreeterClient(channel);
             // var mp3 = new MP3File(@"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3","testik");
-            string path = @"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3";
+            // string path = @"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3";
+            string path = @"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\out.wav";
+
             var mp3 = TagLib.File.Create(path);
 
             var vkc = new VoiceKitClient("bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert", "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=");
@@ -257,48 +225,27 @@ namespace JWT_gRPC_console
             // первый запрос
             StreamingRecognitionConfig streaming_config = new StreamingRecognitionConfig();
             streaming_config.Config = new RecognitionConfig();
-            streaming_config.Config.Encoding = AudioEncoding.MpegAudio;
+            
             streaming_config.Config.SampleRateHertz = (uint)mp3.Properties.AudioSampleRate ;
             streaming_config.Config.NumChannels = (uint)mp3.Properties.AudioChannels;
 
             mp3.Dispose();
            using FileStream fstream =  File.Open(path, FileMode.Open);
 
-             vkc.StreamingRecognize(streaming_config, fstream).GetAwaiter().GetResult();
-            
+            switch (Path.GetExtension(path))
+            {
+                case ".mp3":
+                    streaming_config.Config.Encoding = AudioEncoding.MpegAudio;
+                    vkc.StreamingRecognize(streaming_config, fstream).GetAwaiter().GetResult();
+                    break;
+                case ".wav":
+                    streaming_config.Config.Encoding = AudioEncoding.Linear16;
+                    vkc.StreamingRecognizeWAV(streaming_config, fstream).GetAwaiter().GetResult();
+                    break;
 
-            
-            // var z =  c.StreamingRecognize(srr);
+            }
 
-
-
-
-
-
-
-            /// Далее Реализуем генератор запросов:
-            /// открвыем аудио файл и шлем частями
-
-
-
-
-
-
-            /*
-            Channel channel = new Channel("127.0.0.1:30051", ChannelCredentials.Insecure);
-
-            var client = new Greeter.GreeterClient(channel);
-            String user = "you";
-
-            var reply = client.SayHello(new HelloRequest { Name = user });
-            Console.WriteLine("Greeting: " + reply.Message);
-
-            channel.ShutdownAsync().Wait();
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
-            */
-
-        }
+            }
 
 
        
@@ -340,7 +287,7 @@ namespace JWT_gRPC_console
             private Metadata GetMetadataSTT()
             {
                 Metadata header = new Metadata();
-                header.Add("Authorization", $"Bearer { _authSTT }");
+                header.Add("Authorization", $"Bearer { _authSTT.Token }");
                 return header;
             }
 
@@ -378,7 +325,41 @@ namespace JWT_gRPC_console
                 await streamingSTT.RequestStream.CompleteAsync();
                 await PrintResponsesTask;
             }
+            public async Task StreamingRecognizeWAV(StreamingRecognitionConfig config, Stream audioStream)
+            {
+                var streamingSTT = _clientSTT.StreamingRecognize(GetMetadataSTT());
+                var requestWithConfig = new StreamingRecognizeRequest
+                {
+                    StreamingConfig = config
+                };
+                await streamingSTT.RequestStream.WriteAsync(requestWithConfig); //передаем параметры аудио
 
+                Task PrintResponsesTask = Task.Run(async () =>                 // Пишем ответ в консоль
+                {
+                    while (await streamingSTT.ResponseStream.MoveNext())
+                    {
+                        foreach (var result in streamingSTT.ResponseStream.Current.Results)
+                            foreach (var alternative in result.RecognitionResult.Alternatives)
+                                System.Console.WriteLine(alternative.Transcript);
+                    }
+                });
+
+                var buffer = new byte[config.Config.SampleRateHertz/10];
+                int bytesRead;
+             //   audioStream.Position = 44;
+                while ((bytesRead = audioStream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    await streamingSTT.RequestStream.WriteAsync(
+                        new StreamingRecognizeRequest
+                        {
+                            AudioContent = Google.Protobuf
+                            .ByteString.CopyFrom(buffer, 0, bytesRead),
+                        });
+                }
+
+                await streamingSTT.RequestStream.CompleteAsync();
+                await PrintResponsesTask;
+            }
 
 
         }
@@ -425,6 +406,27 @@ namespace JWT_gRPC_console
                 .AddHeader(HeaderName.KeyId, _apiKey)
                 .Encode();
             }
+
+
+
+            public Stream WavToPcmConvert(string filePath)
+            {
+                //   string fileName = System.IO.Path.GetFileNameWithoutExtension(filePath);
+                MemoryStream mMemoryStream = new MemoryStream();
+                Stream stream = null;
+
+                using (var reader = new WaveFileReader(filePath))
+                {
+                    using (var converter = WaveFormatConversionStream.CreatePcmStream(reader))
+                    {
+                        //  WaveFileWriter.CreateWaveFile(@"C:\TEMP\wav\out.wav", converter);
+                        WaveFileWriter.WriteWavFileToStream(mMemoryStream, converter);
+                        return mMemoryStream;
+                    }
+                }
+            }
+
+
         }
     }
 
