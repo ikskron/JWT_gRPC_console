@@ -28,10 +28,14 @@ namespace JWT_gRPC_console
 
     class Program
     {
-      //  static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
+        //  static string seckey = "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=";
+        static string text = string.Empty;
+
       public  static void Main(string[] args)
         {
-           gRPc_connect();
+            if (args.Length < 1)
+                return;
+            else                             gRPc_connect(args[0]);
 
            
            // var  stringToken = GenerateToken_alt();
@@ -120,15 +124,6 @@ namespace JWT_gRPC_console
 
 
 
-
-
-
-        
-
-
-
-
-
         private static bool ValidateToken(string authToken, string seckey)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
@@ -199,10 +194,8 @@ namespace JWT_gRPC_console
 
 
 
-        static void gRPc_connect()
+        static void gRPc_connect(string path)
         {
-
-
 
             // создаем канал для обмена сообщениями с сервером
             // параметр - адрес сервера gRPC
@@ -216,9 +209,9 @@ namespace JWT_gRPC_console
             //  var client = new Greeter.GreeterClient(channel);
             // var mp3 = new MP3File(@"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3","testik");
             // string path = @"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\2020.10.12_21.15.41_79214430425_incoming_mixed_79098420960.mp3";
-            string path = @"C:\Users\IlinKS\source\repos\JWT_gRPC_console\JWT_gRPC_console\out.wav";
+            // string path = @"c:\Users\ilinks\source\repos\JWT_gRPC_console\JWT_gRPC_console\6650322009_89136872782_2020-01-24_08_24_12.wav";
 
-            var mp3 = TagLib.File.Create(path);
+            var audio = TagLib.File.Create(path);
 
             var vkc = new VoiceKitClient("bnZ6cWRvcWJncWNud2dqcGxtZ21ndXVvZXdjaWpueHk=m.rogencovfilbert", "YXlzdXBvaWhrdmZzZmtvYXZtb3plaHZqeGlrcGZ1d2c=");
             
@@ -226,24 +219,29 @@ namespace JWT_gRPC_console
             StreamingRecognitionConfig streaming_config = new StreamingRecognitionConfig();
             streaming_config.Config = new RecognitionConfig();
             
-            streaming_config.Config.SampleRateHertz = (uint)mp3.Properties.AudioSampleRate ;
-            streaming_config.Config.NumChannels = (uint)mp3.Properties.AudioChannels;
+            streaming_config.Config.SampleRateHertz = (uint)audio.Properties.AudioSampleRate ;
+            streaming_config.Config.NumChannels = (uint)audio.Properties.AudioChannels;
 
-            mp3.Dispose();
-           using FileStream fstream =  File.Open(path, FileMode.Open);
+            audio.Dispose();
+
+//           using FileStream fstream =  File.Open(path, FileMode.Open);
 
             switch (Path.GetExtension(path))
             {
                 case ".mp3":
                     streaming_config.Config.Encoding = AudioEncoding.MpegAudio;
-                    vkc.StreamingRecognize(streaming_config, fstream).GetAwaiter().GetResult();
+                    vkc.StreamingRecognize(streaming_config, File.Open(path, FileMode.Open)).GetAwaiter().GetResult();
                     break;
                 case ".wav":
                     streaming_config.Config.Encoding = AudioEncoding.Linear16;
-                    vkc.StreamingRecognizeWAV(streaming_config, fstream).GetAwaiter().GetResult();
+                    vkc.StreamingRecognizeWAV(streaming_config, WavToPcmConvert(path)).GetAwaiter().GetResult();
                     break;
 
             }
+
+
+
+            return ;
 
             }
 
@@ -306,7 +304,10 @@ namespace JWT_gRPC_console
                     {
                         foreach (var result in streamingSTT.ResponseStream.Current.Results)
                             foreach (var alternative in result.RecognitionResult.Alternatives)
+                            {
                                 System.Console.WriteLine(alternative.Transcript);
+                                text += alternative.Transcript;
+                            }
                     }
                 });
 
@@ -340,7 +341,10 @@ namespace JWT_gRPC_console
                     {
                         foreach (var result in streamingSTT.ResponseStream.Current.Results)
                             foreach (var alternative in result.RecognitionResult.Alternatives)
+                            {
                                 System.Console.WriteLine(alternative.Transcript);
+                                text += alternative.Transcript;
+                            }
                     }
                 });
 
@@ -406,27 +410,23 @@ namespace JWT_gRPC_console
                 .AddHeader(HeaderName.KeyId, _apiKey)
                 .Encode();
             }
+            
+        }
+        public static Stream WavToPcmConvert(string filePath)
+        {
+            //   string fileName = System.IO.Path.GetFileNameWithoutExtension(filePath);
+            MemoryStream mMemoryStream = new MemoryStream();
+           // Stream stream = null;
 
-
-
-            public Stream WavToPcmConvert(string filePath)
+            using (var reader = new WaveFileReader(filePath))
             {
-                //   string fileName = System.IO.Path.GetFileNameWithoutExtension(filePath);
-                MemoryStream mMemoryStream = new MemoryStream();
-                Stream stream = null;
-
-                using (var reader = new WaveFileReader(filePath))
+                using (var converter = WaveFormatConversionStream.CreatePcmStream(reader))
                 {
-                    using (var converter = WaveFormatConversionStream.CreatePcmStream(reader))
-                    {
-                        //  WaveFileWriter.CreateWaveFile(@"C:\TEMP\wav\out.wav", converter);
-                        WaveFileWriter.WriteWavFileToStream(mMemoryStream, converter);
-                        return mMemoryStream;
-                    }
+                    //  WaveFileWriter.CreateWaveFile(@"C:\TEMP\wav\out.wav", converter);
+                    WaveFileWriter.WriteWavFileToStream(mMemoryStream, converter);
+                    return mMemoryStream;
                 }
             }
-
-
         }
     }
 
